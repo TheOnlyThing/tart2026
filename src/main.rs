@@ -1,4 +1,5 @@
-use bevy::{input::common_conditions::input_toggle_active, prelude::*};
+use bevy::{camera_controller::free_camera::FreeCameraPlugin, prelude::*};
+
 
 //egui
 //use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
@@ -32,6 +33,9 @@ fn main() {
     // .add_plugins(
     //     WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)),
     // )
+
+    //bevy plugins
+    .add_plugins(FreeCameraPlugin)
 
     //plugins
     .add_plugins(ScenePlugin)

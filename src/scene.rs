@@ -1,4 +1,4 @@
-use bevy::{ecs::name, prelude::*};
+use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, prelude::*};
 use crate::code::*;
 
 //plugin stuffs ==
@@ -34,6 +34,7 @@ fn setup_scene(
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(7.5, 0.0, 25.0),
+        FreeCamera{..Default::default()},
     ));
     //blue_thing
     commands.spawn((
