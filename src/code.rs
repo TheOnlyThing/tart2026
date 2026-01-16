@@ -5,7 +5,9 @@ pub struct CodePlugin;
 
 impl Plugin for CodePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, touch);
+        app.add_systems(FixedUpdate, touch)
+            //.add_observer()
+            ;
     }
 }
 
@@ -25,11 +27,13 @@ pub struct d1_size {
 //systems ============
 
 fn touch(
-    query: Query<(Entity, Option<&d1_position>, Option<&d1_size>)>,
+    changed: Query<(Entity, Option<&d1_position>, Option<&d1_size>), Changed<d1_position>>,
+    all: Query<(Entity, Option<&d1_position>, Option<&d1_size>)>,
 ) {
     //let me 
 
-    for (entity, d1_position, d1_size) in query {
-        
+    for (entity, d1_position, d1_size) in &all {
+
+
     }
 }

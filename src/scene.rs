@@ -1,6 +1,11 @@
 use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, prelude::*};
 use crate::code::*;
 
+//observer spawn test
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
+
+
 //plugin stuffs ==
 
 pub struct ScenePlugin;
@@ -12,6 +17,39 @@ impl Plugin for ScenePlugin {
 }
 
 //components ===========
+
+#[derive(EntityEvent)]
+struct Explode {
+    entity: Entity,
+}
+
+#[derive(Event)]
+struct ExplodeMines {
+    pos: Vec3,
+    radius: f32,
+}
+
+
+
+#[derive(Component)]
+struct Mine {
+    pos: Vec3,
+    size: f32,
+}
+
+impl Mine {
+    fn random(rand: &mut ChaCha8Rng) -> Self {
+        Mine {
+            pos: Vec3::new(
+                (rand.random::<f32>() - 0.5) * 1200.0,
+                (rand.random::<f32>() - 0.5) * 600.0,
+                (rand.random::<f32>() - 0.5) * 600.0,
+            ),
+            size: 4.0 + rand.random::<f32>() * 16.0,
+        }
+    }
+}
+
 
 
 //systems ============
@@ -47,4 +85,34 @@ fn setup_scene(
         Transform::from_xyz( 0.5, 0.0,0.0),
     ));
 
+
+    let mut rng = ChaCha8Rng::seed_from_u64(19878367467713);
+
+    //observer
+    let mut observer = Observer::new(explode_mine);
+
+    // As we spawn entities, we can make this observer watch each of them:
+    for _ in 0..1000 {
+        let entity = commands.spawn(Mine::random(&mut rng)).id();
+        observer.watch_entity(entity);
+    }
+
+    // By spawning the Observer component, it becomes active!
+    commands.spawn(observer);
+
+}
+
+fn explode_mine(explode: On<Explode>, query: Query<&Mine>, mut commands: Commands) {
+    // Explode is an EntityEvent. `explode.entity` is the entity that Explode was triggered for.
+    let Ok(mut entity) = commands.get_entity(explode.entity) else {
+        return;
+    };
+    info!("Boom! {} exploded.", explode.entity);
+    entity.despawn();
+    let mine = query.get(explode.entity).unwrap();
+    // Trigger another explosion cascade.
+    commands.trigger(ExplodeMines {
+        pos: mine.pos,
+        radius: mine.size,
+    });
 }
