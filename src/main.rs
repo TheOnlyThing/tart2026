@@ -1,8 +1,8 @@
-use bevy::{camera_controller::free_camera::FreeCameraPlugin, prelude::*};
+use bevy::{camera_controller::free_camera::FreeCameraPlugin, input::common_conditions::input_toggle_active, prelude::*};
 
 
 //egui
-//use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
+use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 
 //plugin stuffs ==
 
@@ -29,10 +29,10 @@ fn main() {
     }),)
 
     //egui
-    // .add_plugins(EguiPlugin::default())
-    // .add_plugins(
-    //     WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)),
-    // )
+    .add_plugins(EguiPlugin::default())
+    .add_plugins(
+        WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)),
+    )
 
     //bevy plugins
     .add_plugins(FreeCameraPlugin)
