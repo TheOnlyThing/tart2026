@@ -92,8 +92,11 @@ fn setup_scene(
     let mut observer = Observer::new(explode_mine);
 
     // As we spawn entities, we can make this observer watch each of them:
-    for _ in 0..1000 {
-        let entity = commands.spawn(Mine::random(&mut rng)).id();
+    for _ in 0..100 {
+        let entity = commands.spawn(
+            Mine::random(&mut rng)
+        ).id();
+        commands.entity(entity).insert(Transform::from_xyz( 0.5, 0.0,0.0));
         observer.watch_entity(entity);
     }
 
