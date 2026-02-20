@@ -13,6 +13,7 @@ pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_scene);
+        app.add_systems(FixedUpdate, (draw_shapes, handle_click));
     }
 }
 
@@ -118,4 +119,31 @@ fn explode_mine(explode: On<Explode>, query: Query<&Mine>, mut commands: Command
         pos: mine.pos,
         radius: mine.size,
     });
+
+}
+
+// Draw a circle for each mine using `Gizmos`
+fn draw_shapes(mut gizmos: Gizmos, mines: Query<&Mine>) {
+    for mine in &mines {
+        gizmos.sphere(
+            mine.pos,
+            mine.size,
+            Color::hsl((mine.size - 4.0) / 16.0 * 360.0, 1.0, 0.8),
+        );
+    }
+}
+
+// Trigger `ExplodeMines` at the position of a given click
+fn handle_click(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    camera: Single<(&Camera, &GlobalTransform)>,
+    mut commands: Commands,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyR) {
+        let (_, camera_transform) = *camera;
+        let pos = camera_transform.translation();
+        commands.trigger(ExplodeMines { pos, radius: 1.0 });
+    }
+    //im assuming since this last block in function, and is if statement
+    //this function will return true or false, even if it dont got a "return" parameter
 }
