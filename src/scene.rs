@@ -1,4 +1,4 @@
-use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, prelude::*};
+use bevy::{camera_controller::free_camera::FreeCamera, color::palettes::css::RED, ecs::name, platform::collections::{HashMap, HashSet}, prelude::*};
 use crate::code::*;
 
 //observer spawn test
@@ -14,6 +14,20 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_scene);
         app.add_systems(FixedUpdate, (draw_shapes, handle_click));
+
+        app.init_resource::<NearbyIndex>();
+        app.add_observer(
+        |explode_mines: On<ExplodeMines>,
+        mines: Query<(Entity, &Mine)>,
+        mut commands: Commands| {
+        for (entity, mine) in &mines {
+            if mine.pos.distance(explode_mines.pos) < mine.size + explode_mines.radius {
+                commands.trigger(Explode { entity });
+            }
+        }
+    },
+);
+
     }
 }
 
@@ -29,7 +43,6 @@ struct ExplodeMines {
     pos: Vec3,
     radius: f32,
 }
-
 
 
 #[derive(Component)]
@@ -49,6 +62,11 @@ impl Mine {
             size: 4.0 + rand.random::<f32>() * 16.0,
         }
     }
+}
+
+#[derive(Resource, Default)]
+struct NearbyIndex {
+    map: HashMap<(i32, i32), HashSet<Entity>>,
 }
 
 
@@ -93,7 +111,7 @@ fn setup_scene(
     let mut observer = Observer::new(explode_mine);
 
     // As we spawn entities, we can make this observer watch each of them:
-    for _ in 0..100 {
+    for _ in 0..1000 {
         let entity = commands.spawn(
             Mine::random(&mut rng)
         ).id();
@@ -138,11 +156,21 @@ fn handle_click(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     camera: Single<(&Camera, &GlobalTransform)>,
     mut commands: Commands,
+    mut gizmos: Gizmos,
 ) {
     if keyboard_input.just_pressed(KeyCode::KeyR) {
+        println!("key R");
         let (_, camera_transform) = *camera;
         let pos = camera_transform.translation();
-        commands.trigger(ExplodeMines { pos, radius: 1.0 });
+
+        let explode_radius = 250.0;
+        gizmos.sphere(
+            pos,
+            explode_radius,
+            Color::hsl(21.0,1.0,0.6),
+        );
+
+        commands.trigger(ExplodeMines { pos, radius: explode_radius });
     }
     //im assuming since this last block in function, and is if statement
     //this function will return true or false, even if it dont got a "return" parameter
