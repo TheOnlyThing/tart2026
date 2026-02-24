@@ -1,4 +1,4 @@
-use bevy::{camera_controller::free_camera::FreeCamera, color::palettes::css::RED, ecs::name, platform::collections::{HashMap, HashSet}, prelude::*};
+use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, platform::collections::{HashMap, HashSet}, prelude::*};
 use crate::code::*;
 
 //observer spawn test
@@ -14,6 +14,7 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_scene);
         app.add_systems(FixedUpdate, (draw_shapes, handle_click));
+        app.add_systems(FixedUpdate, (faux_movement));
 
         app.init_resource::<NearbyIndex>();
         app.add_observer(
@@ -171,7 +172,27 @@ fn handle_click(
         );
 
         commands.trigger(ExplodeMines { pos, radius: explode_radius });
-    }
+    }//beautitides rich
     //im assuming since this last block in function, and is if statement
     //this function will return true or false, even if it dont got a "return" parameter
+}
+
+fn faux_movement(
+    query: Query<&Transform, (With<Camera>, Changed<Transform>)>,
+    mut gizmos: Gizmos,
+    mut commands: Commands,
+) {
+    let radius = 20.0;
+
+    for transform in query.iter() {
+        let center = transform.translation;
+
+        gizmos.sphere(
+            center,
+            radius,
+            Color::hsl(21.0,1.0,0.6),
+        );
+
+        commands.trigger(ExplodeMines { pos: center, radius: radius });
+    }
 }
