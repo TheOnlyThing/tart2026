@@ -1,5 +1,6 @@
 use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, platform::collections::{HashMap, HashSet}, prelude::*};
 use crate::code::*;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 //observer spawn test
 use rand::{Rng, SeedableRng};
@@ -13,7 +14,7 @@ pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_scene);
-        app.add_systems(FixedUpdate, (draw_shapes, handle_click));
+        app.add_systems(FixedUpdate, (draw_shapes));
         app.add_systems(FixedUpdate, (faux_movement));
 
         app.init_resource::<NearbyIndex>();
@@ -152,40 +153,36 @@ fn draw_shapes(mut gizmos: Gizmos, mines: Query<&Mine>) {
     }
 }
 
-// Trigger `ExplodeMines` at the position of a given click
-fn handle_click(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    camera: Single<(&Camera, &GlobalTransform)>,
-    mut commands: Commands,
-    mut gizmos: Gizmos,
-) {
-    if keyboard_input.just_pressed(KeyCode::KeyR) {
-        println!("key R");
-        let (_, camera_transform) = *camera;
-        let pos = camera_transform.translation();
-
-        let explode_radius = 250.0;
-        gizmos.sphere(
-            pos,
-            explode_radius,
-            Color::hsl(21.0,1.0,0.6),
-        );
-
-        commands.trigger(ExplodeMines { pos, radius: explode_radius });
-    }//beautitides rich
-    //im assuming since this last block in function, and is if statement
-    //this function will return true or false, even if it dont got a "return" parameter
-}
-
 fn faux_movement(
     query: Query<&Transform, (With<Camera>, Changed<Transform>)>,
     mut gizmos: Gizmos,
     mut commands: Commands,
+    mut last_sample: Local<Option<(Vec3, f64)>>,
 ) {
     let radius = 20.0;
 
     for transform in query.iter() {
         let center = transform.translation;
+
+    /*
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+
+        let force = if let Some((prev_pos, prev_time)) = *last_sample {
+            let dt = (now_secs - prev_time).max(f64::EPSILON) as f32;
+            (center - prev_pos) / dt
+        } else {
+            Vec3::ZERO
+        };
+
+        *last_sample = Some((center, now_secs));
+
+        println!("force:{:?}",force);
+        gizmos.line(center, center + force, Color::hsl(200.0, 1.0, 0.6));
+    */
+    
 
         gizmos.sphere(
             center,
