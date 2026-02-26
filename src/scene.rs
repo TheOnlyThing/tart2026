@@ -1,6 +1,14 @@
 use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, platform::collections::{HashMap, HashSet}, prelude::*};
 use crate::code::*;
-use std::time::{SystemTime, UNIX_EPOCH};
+//time
+use std::time::Instant;
+
+//byte event shi
+use std::fs::{File, OpenOptions};
+use std::io::{BufWriter, Write, Read, Seek, SeekFrom};
+use std::path::Path;
+
+const EVENT_SIZE: usize = 36; // 16 (u128) + 8 (u64) + 12 (Vec3<f32>) bytes
 
 //observer spawn test
 use rand::{Rng, SeedableRng};
@@ -154,36 +162,34 @@ fn draw_shapes(mut gizmos: Gizmos, mines: Query<&Mine>) {
 }
 
 fn faux_movement(
-    query: Query<&Transform, (With<Camera>, Changed<Transform>)>,
+    query: Query<(Entity, &Transform), (With<Camera>, Changed<Transform>)>,
     mut gizmos: Gizmos,
     mut commands: Commands,
     mut last_sample: Local<Option<(Vec3, f64)>>,
 ) {
     let radius = 20.0;
 
-    for transform in query.iter() {
+    for (entity, transform) in query.iter() {
         let center = transform.translation;
 
-    /*
-        let now_secs = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs_f64())
-            .unwrap_or(0.0);
+        // current time in nano seconds
+        let start = Instant::now();
+        let elapsed_nanos: u128 = start.elapsed().as_millis();
+        
+        //append vec3
+        if let Ok(mut log) = EventLog::open("position_events.log") {
+            let event: PositionEvent = PositionEvent {
+                tick: elapsed_nanos,
+                entity_id: entity.to_bits(),
+                position: center,
+            };
+            let _ = log.append(event);
+            println!("{:?}", event);
+        }
 
-        let force = if let Some((prev_pos, prev_time)) = *last_sample {
-            let dt = (now_secs - prev_time).max(f64::EPSILON) as f32;
-            (center - prev_pos) / dt
-        } else {
-            Vec3::ZERO
-        };
-
-        *last_sample = Some((center, now_secs));
-
-        println!("force:{:?}",force);
-        gizmos.line(center, center + force, Color::hsl(200.0, 1.0, 0.6));
-    */
-    
-
+        //println!("force:{:?}",force);
+        //gizmos.line(center, center + force, Color::hsl(200.0, 1.0, 0.6));
+        
         gizmos.sphere(
             center,
             radius,
@@ -191,5 +197,84 @@ fn faux_movement(
         );
 
         commands.trigger(ExplodeMines { pos: center, radius: radius });
+    }
+}
+
+//understand
+//converter from position data to bytes shi
+#[derive(Debug, Clone, Copy)]
+pub struct PositionEvent {
+    pub tick: u128,
+    pub entity_id: u64,
+    pub position: Vec3,
+}
+
+impl PositionEvent {
+    pub fn to_bytes(self) -> [u8; EVENT_SIZE] {
+        let mut buf = [0u8; EVENT_SIZE];
+
+        buf[0..16].copy_from_slice(&self.tick.to_le_bytes());
+        buf[16..24].copy_from_slice(&self.entity_id.to_le_bytes());
+        buf[24..28].copy_from_slice(&self.position.x.to_le_bytes());
+        buf[28..32].copy_from_slice(&self.position.y.to_le_bytes());
+        buf[32..36].copy_from_slice(&self.position.z.to_le_bytes());
+
+        buf
+    }
+
+    pub fn from_bytes(buf: &[u8; EVENT_SIZE]) -> Self {
+        let tick = u128::from_le_bytes(buf[0..16].try_into().unwrap());
+        let entity_id = u64::from_le_bytes(buf[16..24].try_into().unwrap());
+        let x = f32::from_le_bytes(buf[24..28].try_into().unwrap());
+        let y = f32::from_le_bytes(buf[28..32].try_into().unwrap());
+        let z = f32::from_le_bytes(buf[32..36].try_into().unwrap());
+
+        Self {
+            tick,
+            entity_id,
+            position: Vec3::new(x, y, z),
+        }
+    }
+}
+
+//understand
+//file shi and maybe reading for the byte file idk
+pub struct EventLog {
+    writer: BufWriter<File>,
+}
+
+impl EventLog {
+    pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+
+        Ok(Self {
+            writer: BufWriter::with_capacity(1024 * 1024, file), // 1MB buffer
+        })
+    }
+
+    pub fn append(&mut self, event: PositionEvent) -> std::io::Result<()> {
+        let bytes = event.to_bytes();
+        self.writer.write_all(&bytes)
+    }
+
+    pub fn replay(path: impl AsRef<Path>) -> std::io::Result<Vec<PositionEvent>> {
+        let mut file = File::open(path)?;   // ← Opens the file for reading
+        let mut events = Vec::new();
+        let mut buf = [0u8; EVENT_SIZE];
+
+        loop {
+            match file.read_exact(&mut buf) {  // ← Reads raw bytes
+                Ok(_) => {
+                    events.push(PositionEvent::from_bytes(&buf)); // ← Converts bytes → struct
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(events)
     }
 }
