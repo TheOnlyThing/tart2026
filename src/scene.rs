@@ -174,7 +174,7 @@ fn faux_movement(
 
         // current time in nano seconds
         let start = Instant::now();
-        let elapsed_nanos: u128 = start.elapsed().as_millis();
+        let elapsed_nanos: u128 = start.elapsed().as_nanos();
         
         //append vec3
         if let Ok(mut log) = EventLog::open("position_events.log") {
