@@ -1,6 +1,8 @@
-use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, platform::collections::{HashMap, HashSet}, prelude::*};
+use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, input::{ButtonState, keyboard::KeyboardInput}, platform::collections::{HashMap, HashSet}, prelude::*};
 use crate::code::*;
 //time
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
 //byte event shi
@@ -9,6 +11,7 @@ use std::io::{BufWriter, Write, Read, Seek, SeekFrom};
 use std::path::Path;
 
 const EVENT_SIZE: usize = 36; // 16 (u128) + 8 (u64) + 12 (Vec3<f32>) bytes
+const INPUT_EVENT_SIZE: usize = 25; // 16 (u128) + 8 (u64 key hash) + 1 (bool) bytes
 
 //observer spawn test
 use rand::{Rng, SeedableRng};
@@ -24,6 +27,7 @@ impl Plugin for ScenePlugin {
         app.add_systems(Startup, setup_scene);
         app.add_systems(FixedUpdate, (draw_shapes));
         app.add_systems(FixedUpdate, (faux_movement));
+        app.add_systems(FixedUpdate, (input_log));
 
         app.init_resource::<NearbyIndex>();
         app.add_observer(
@@ -121,7 +125,7 @@ fn setup_scene(
     let mut observer = Observer::new(explode_mine);
 
     // As we spawn entities, we can make this observer watch each of them:
-    for _ in 0..1000 {
+    for _ in 0..10 {
         let entity = commands.spawn(
             Mine::random(&mut rng)
         ).id();
@@ -133,6 +137,9 @@ fn setup_scene(
     commands.spawn(observer);
 
 }
+
+
+
 
 fn explode_mine(explode: On<Explode>, query: Query<&Mine>, mut commands: Commands) {
     // Explode is an EntityEvent. `explode.entity` is the entity that Explode was triggered for.
@@ -161,6 +168,50 @@ fn draw_shapes(mut gizmos: Gizmos, mines: Query<&Mine>) {
     }
 }
 
+fn input_log(mut keyboard_inputs: MessageReader<KeyboardInput>) {
+    for input in keyboard_inputs.read() {
+
+        // current time in nano seconds
+        let start = Instant::now();
+        let elapsed_nanos: u128 = start.elapsed().as_nanos();
+
+        info!("time: {:?} keycode: {:?} state: {:?}", elapsed_nanos,input.key_code,input.state,);
+        //append input
+        if let Ok(mut log) = InputLog::open("input_events.log") {
+            let event: InputEvent = InputEvent {
+                nanos: elapsed_nanos,
+                key_code_hash: hash_key_code(&input.key_code),
+                input_state: input.state.is_pressed(),
+            };
+            let _ = log.append(event);
+            input_reader();
+            //println!("{:?}", event);
+        }
+    }
+}
+
+//maaybe dont register input from reading, raather just store? but I dont want two systems so idk
+fn input_reader() {
+    match InputLog::replay("input_events.log") {
+        Ok(events) => {
+            if events.is_empty() {
+                println!("input_events.log is empty");
+                return;
+            }
+
+            println!("Read {} input events from input_events.log", events.len());
+            for (i, event) in events.iter().enumerate() {
+                let state = if event.input_state { "Pressed" } else { "Released" };
+                println!(
+                    "[{i}] nanos={} key_hash={} state={}",
+                    event.nanos, event.key_code_hash, state
+                );
+            }
+        }
+        Err(err) => eprintln!("Failed to read input_events.log: {err}"),
+    }
+}
+
 fn faux_movement(
     query: Query<(Entity, &Transform), (With<Camera>, Changed<Transform>)>,
     mut gizmos: Gizmos,
@@ -184,7 +235,7 @@ fn faux_movement(
                 position: center,
             };
             let _ = log.append(event);
-            println!("{:?}", event);
+            //println!("{:?}", event);
         }
 
         //println!("force:{:?}",force);
@@ -207,6 +258,42 @@ pub struct PositionEvent {
     pub tick: u128,
     pub entity_id: u64,
     pub position: Vec3,
+}
+#[derive(Debug, Clone, Copy)]
+pub struct InputEvent {
+    pub nanos: u128,
+    pub key_code_hash: u64,
+    pub input_state: bool,
+}
+
+//why does bool need 24 bits?
+impl InputEvent {
+    pub fn to_bytes(self) -> [u8; INPUT_EVENT_SIZE] {
+        let mut buf = [0u8; INPUT_EVENT_SIZE];
+        buf[0..16].copy_from_slice(&self.nanos.to_le_bytes());
+        buf[16..24].copy_from_slice(&self.key_code_hash.to_le_bytes());
+        buf[24] = self.input_state as u8;
+        buf
+    }
+
+    pub fn from_bytes(buf: &[u8; INPUT_EVENT_SIZE]) -> Self {
+        let nanos = u128::from_le_bytes(buf[0..16].try_into().unwrap());
+        let key_code_hash = u64::from_le_bytes(buf[16..24].try_into().unwrap());
+        let input_state = buf[24] != 0;
+
+        Self {
+            nanos,
+            key_code_hash,
+            input_state,
+        }
+    }
+}
+
+//is this best way to convert KeyCode data? when would we want to convert types an in what way
+fn hash_key_code(key_code: &KeyCode) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    key_code.hash(&mut hasher);
+    hasher.finish()
 }
 
 impl PositionEvent {
@@ -243,38 +330,62 @@ pub struct EventLog {
     writer: BufWriter<File>,
 }
 
+pub struct InputLog {
+    writer: BufWriter<File>,
+}
+
+fn open_log_writer(path: impl AsRef<Path>) -> std::io::Result<BufWriter<File>> {
+    let file = OpenOptions::new().create(true).append(true).open(path)?;
+    Ok(BufWriter::with_capacity(1024 * 1024, file))
+}
+
+fn replay_fixed_size<T, const N: usize>(
+    path: impl AsRef<Path>,
+    from_bytes: fn(&[u8; N]) -> T,
+) -> std::io::Result<Vec<T>> {
+    let mut file = File::open(path)?;
+    let mut events = Vec::new();
+    let mut buf = [0u8; N];
+
+    loop {
+        match file.read_exact(&mut buf) {
+            Ok(_) => events.push(from_bytes(&buf)),
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(events)
+}
+
 impl EventLog {
     pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
-
         Ok(Self {
-            writer: BufWriter::with_capacity(1024 * 1024, file), // 1MB buffer
+            writer: open_log_writer(path)?,
         })
     }
 
     pub fn append(&mut self, event: PositionEvent) -> std::io::Result<()> {
-        let bytes = event.to_bytes();
-        self.writer.write_all(&bytes)
+        self.writer.write_all(&event.to_bytes())
     }
 
     pub fn replay(path: impl AsRef<Path>) -> std::io::Result<Vec<PositionEvent>> {
-        let mut file = File::open(path)?;   // ← Opens the file for reading
-        let mut events = Vec::new();
-        let mut buf = [0u8; EVENT_SIZE];
+        replay_fixed_size::<PositionEvent, EVENT_SIZE>(path, PositionEvent::from_bytes)
+    }
+}
 
-        loop {
-            match file.read_exact(&mut buf) {  // ← Reads raw bytes
-                Ok(_) => {
-                    events.push(PositionEvent::from_bytes(&buf)); // ← Converts bytes → struct
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-                Err(e) => return Err(e),
-            }
-        }
+impl InputLog {
+    pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        Ok(Self {
+            writer: open_log_writer(path)?,
+        })
+    }
 
-        Ok(events)
+    pub fn append(&mut self, event: InputEvent) -> std::io::Result<()> {
+        self.writer.write_all(&event.to_bytes())
+    }
+
+    pub fn replay(path: impl AsRef<Path>) -> std::io::Result<Vec<InputEvent>> {
+        replay_fixed_size::<InputEvent, INPUT_EVENT_SIZE>(path, InputEvent::from_bytes)
     }
 }
