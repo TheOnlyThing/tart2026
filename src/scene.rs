@@ -65,6 +65,9 @@ struct Mine {
     size: f32,
 }
 
+#[derive(Resource)]
+struct StartTime(Instant);
+
 impl Mine {
     fn random(rand: &mut ChaCha8Rng) -> Self {
         Mine {
@@ -92,6 +95,8 @@ fn setup_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+
+    commands.insert_resource(StartTime(Instant::now()));
 
     // light
     commands.spawn((
@@ -168,12 +173,14 @@ fn draw_shapes(mut gizmos: Gizmos, mines: Query<&Mine>) {
     }
 }
 
-fn input_log(mut keyboard_inputs: MessageReader<KeyboardInput>) {
+fn input_log(
+    mut keyboard_inputs: MessageReader<KeyboardInput>,
+    start_time: Res<StartTime>,
+) {
     for input in keyboard_inputs.read() {
 
         // current time in nano seconds
-        let start = Instant::now();
-        let elapsed_nanos: u128 = start.elapsed().as_nanos();
+        let elapsed_nanos: u128 = start_time.0.elapsed().as_nanos();
 
         info!("time: {:?} keycode: {:?} state: {:?}", elapsed_nanos,input.key_code,input.state,);
         //append input
@@ -217,6 +224,7 @@ fn faux_movement(
     mut gizmos: Gizmos,
     mut commands: Commands,
     mut last_sample: Local<Option<(Vec3, f64)>>,
+    start_time: Res<StartTime>,
 ) {
     let radius = 20.0;
 
@@ -224,8 +232,7 @@ fn faux_movement(
         let center = transform.translation;
 
         // current time in nano seconds
-        let start = Instant::now();
-        let elapsed_nanos: u128 = start.elapsed().as_nanos();
+        let elapsed_nanos: u128 = start_time.0.elapsed().as_nanos();
         
         //append vec3
         if let Ok(mut log) = EventLog::open("position_events.log") {
