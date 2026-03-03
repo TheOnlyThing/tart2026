@@ -146,14 +146,13 @@ fn setup_scene(
 
 
 
-fn explode_mine(explode: On<Explode>, query: Query<&Mine>, mut commands: Commands) {
+fn explode_mine(explode: On<Explode>, mines: Query<&Mine>, mut commands: Commands) {
     // Explode is an EntityEvent. `explode.entity` is the entity that Explode was triggered for.
-    let Ok(mut entity) = commands.get_entity(explode.entity) else {
-        return;
-    };
+    let Ok(mine) = mines.get(explode.entity) else { return; };
+
     info!("Boom! {} exploded.", explode.entity);
-    entity.despawn();
-    let mine = query.get(explode.entity).unwrap();
+    commands.entity(explode.entity).despawn();
+
     // Trigger another explosion cascade.
     commands.trigger(ExplodeMines {
         pos: mine.pos,
