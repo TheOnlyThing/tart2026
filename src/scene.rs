@@ -31,11 +31,11 @@ impl Plugin for ScenePlugin {
 
         app.init_resource::<NearbyIndex>();
         app.add_observer(
-        |explode_mines: On<ExplodeMines>,
-        mines: Query<(Entity, &Mine)>,
+        |explode_specks: On<ExplodeSpecks>,
+        specks: Query<(Entity, &Mine)>,
         mut commands: Commands| {
-        for (entity, mine) in &mines {
-            if mine.pos.distance(explode_mines.pos) < mine.size + explode_mines.radius {
+        for (entity, speck) in &specks {
+            if speck.pos.distance(explode_specks.pos) < speck.size + explode_specks.radius {
                 commands.trigger(Explode { entity });
             }
         }
@@ -53,7 +53,7 @@ struct Explode {
 }
 
 #[derive(Event)]
-struct ExplodeMines {
+struct ExplodeSpecks {
     pos: Vec3,
     radius: f32,
 }
@@ -127,7 +127,7 @@ fn setup_scene(
     let mut rng = ChaCha8Rng::seed_from_u64(19878367467713);
 
     //observer
-    let mut observer = Observer::new(explode_mine);
+    let mut observer = Observer::new(explode_speck);
 
     // As we spawn entities, we can make this observer watch each of them:
     for _ in 0..10 {
@@ -146,28 +146,28 @@ fn setup_scene(
 
 
 
-fn explode_mine(explode: On<Explode>, mines: Query<&Mine>, mut commands: Commands) {
+fn explode_speck(explode: On<Explode>, specks: Query<&Mine>, mut commands: Commands) {
     // Explode is an EntityEvent. `explode.entity` is the entity that Explode was triggered for.
-    let Ok(mine) = mines.get(explode.entity) else { return; };
+    let Ok(speck) = specks.get(explode.entity) else { return; };
 
     info!("Boom! {} exploded.", explode.entity);
     commands.entity(explode.entity).despawn();
 
     // Trigger another explosion cascade.
-    commands.trigger(ExplodeMines {
-        pos: mine.pos,
-        radius: mine.size,
+    commands.trigger(ExplodeSpecks {
+        pos: speck.pos,
+        radius: speck.size,
     });
 
 }
 
-// Draw a circle for each mine using `Gizmos`
-fn draw_shapes(mut gizmos: Gizmos, mines: Query<&Mine>) {
-    for mine in &mines {
+// Draw a circle for each speck using `Gizmos`
+fn draw_shapes(mut gizmos: Gizmos, specks: Query<&Mine>) {
+    for speck in &specks {
         gizmos.sphere(
-            mine.pos,
-            mine.size,
-            Color::hsl((mine.size - 4.0) / 16.0 * 360.0, 1.0, 0.8),
+            speck.pos,
+            speck.size,
+            Color::hsl((speck.size - 4.0) / 16.0 * 360.0, 1.0, 0.8),
         );
     }
 }
@@ -253,7 +253,7 @@ fn faux_movement(
             Color::hsl(21.0,1.0,0.6),
         );
 
-        commands.trigger(ExplodeMines { pos: center, radius: radius });
+        commands.trigger(ExplodeSpecks { pos: center, radius: radius });
     }
 }
 
