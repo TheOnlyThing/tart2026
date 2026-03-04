@@ -32,7 +32,7 @@ impl Plugin for ScenePlugin {
         app.init_resource::<NearbyIndex>();
         app.add_observer(
         |explode_specks: On<ExplodeSpecks>,
-        specks: Query<(Entity, &Mine)>,
+        specks: Query<(Entity, &Speck)>,
         mut commands: Commands| {
         for (entity, speck) in &specks {
             if speck.pos.distance(explode_specks.pos) < speck.size + explode_specks.radius {
@@ -60,7 +60,7 @@ struct ExplodeSpecks {
 
 
 #[derive(Component)]
-struct Mine {
+struct Speck {
     pos: Vec3,
     size: f32,
 }
@@ -68,9 +68,9 @@ struct Mine {
 #[derive(Resource)]
 struct StartTime(Instant);
 
-impl Mine {
+impl Speck {
     fn random(rand: &mut ChaCha8Rng) -> Self {
-        Mine {
+        Speck {
             pos: Vec3::new(
                 (rand.random::<f32>() - 0.5) * 1200.0,
                 (rand.random::<f32>() - 0.5) * 600.0,
@@ -132,7 +132,7 @@ fn setup_scene(
     // As we spawn entities, we can make this observer watch each of them:
     for _ in 0..10 {
         let entity = commands.spawn(
-            Mine::random(&mut rng)
+            Speck::random(&mut rng)
         ).id();
         commands.entity(entity).insert(Transform::from_xyz( 0.5, 0.0,0.0));
         observer.watch_entity(entity);
@@ -146,7 +146,7 @@ fn setup_scene(
 
 
 
-fn explode_speck(explode: On<Explode>, specks: Query<&Mine>, mut commands: Commands) {
+fn explode_speck(explode: On<Explode>, specks: Query<&Speck>, mut commands: Commands) {
     // Explode is an EntityEvent. `explode.entity` is the entity that Explode was triggered for.
     let Ok(speck) = specks.get(explode.entity) else { return; };
 
@@ -162,7 +162,7 @@ fn explode_speck(explode: On<Explode>, specks: Query<&Mine>, mut commands: Comma
 }
 
 // Draw a circle for each speck using `Gizmos`
-fn draw_shapes(mut gizmos: Gizmos, specks: Query<&Mine>) {
+fn draw_shapes(mut gizmos: Gizmos, specks: Query<&Speck>) {
     for speck in &specks {
         gizmos.sphere(
             speck.pos,
