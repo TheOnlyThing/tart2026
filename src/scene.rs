@@ -1,8 +1,6 @@
 use bevy::{camera_controller::free_camera::FreeCamera, ecs::name, input::{ButtonState, keyboard::KeyboardInput}, platform::collections::{HashMap, HashSet}, prelude::*};
 use crate::code::*;
 //time
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
 //byte event shi
@@ -11,7 +9,7 @@ use std::io::{BufWriter, Write, Read, Seek, SeekFrom};
 use std::path::Path;
 
 const EVENT_SIZE: usize = 36; // 16 (u128) + 8 (u64) + 12 (Vec3<f32>) bytes
-const INPUT_EVENT_SIZE: usize = 25; // 16 (u128) + 8 (u64 key hash) + 1 (bool) bytes
+const INPUT_EVENT_SIZE: usize = 21; // 16 (u128) + 4 (u32 key id) + 1 (bool) bytes
 
 //observer spawn test
 use rand::{Rng, SeedableRng};
@@ -186,7 +184,7 @@ fn input_log(
         if let Ok(mut log) = InputLog::open("input_events.log") {
             let event: InputEvent = InputEvent {
                 nanos: elapsed_nanos,
-                key_code_hash: hash_key_code(&input.key_code),
+                key_code_id: key_code_to_u32(&input.key_code),
                 input_state: input.state.is_pressed(),
             };
             let _ = log.append(event);
@@ -210,7 +208,7 @@ fn input_reader() {
                 let state = if event.input_state { "Pressed" } else { "Released" };
                 println!(
                     "[{i}] nanos={} key_hash={} state={}",
-                    event.nanos, event.key_code_hash, state
+                    event.nanos, event.key_code_id, state
                 );
             }
         }
@@ -268,7 +266,7 @@ pub struct PositionEvent {
 #[derive(Debug, Clone, Copy)]
 pub struct InputEvent {
     pub nanos: u128,
-    pub key_code_hash: u64,
+    pub key_code_id: u32,
     pub input_state: bool,
 }
 
@@ -277,29 +275,223 @@ impl InputEvent {
     pub fn to_bytes(self) -> [u8; INPUT_EVENT_SIZE] {
         let mut buf = [0u8; INPUT_EVENT_SIZE];
         buf[0..16].copy_from_slice(&self.nanos.to_le_bytes());
-        buf[16..24].copy_from_slice(&self.key_code_hash.to_le_bytes());
-        buf[24] = self.input_state as u8;
+        buf[16..20].copy_from_slice(&self.key_code_id.to_le_bytes());
+        buf[20] = self.input_state as u8;
         buf
     }
 
     pub fn from_bytes(buf: &[u8; INPUT_EVENT_SIZE]) -> Self {
         let nanos = u128::from_le_bytes(buf[0..16].try_into().unwrap());
-        let key_code_hash = u64::from_le_bytes(buf[16..24].try_into().unwrap());
-        let input_state = buf[24] != 0;
+        let key_code_id = u32::from_le_bytes(buf[16..20].try_into().unwrap());
+        let input_state = buf[20] != 0;
 
         Self {
             nanos,
-            key_code_hash,
+            key_code_id,
             input_state,
         }
     }
 }
 
-//is this best way to convert KeyCode data? when would we want to convert types an in what way
-fn hash_key_code(key_code: &KeyCode) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    key_code.hash(&mut hasher);
-    hasher.finish()
+// Stable mapping from KeyCode to a fixed u32 id. Values must never change once assigned.
+fn key_code_to_u32(key_code: &KeyCode) -> u32 {
+    match key_code {
+        KeyCode::Backquote => 1,
+        KeyCode::Backslash => 2,
+        KeyCode::BracketLeft => 3,
+        KeyCode::BracketRight => 4,
+        KeyCode::Comma => 5,
+        KeyCode::Digit0 => 6,
+        KeyCode::Digit1 => 7,
+        KeyCode::Digit2 => 8,
+        KeyCode::Digit3 => 9,
+        KeyCode::Digit4 => 10,
+        KeyCode::Digit5 => 11,
+        KeyCode::Digit6 => 12,
+        KeyCode::Digit7 => 13,
+        KeyCode::Digit8 => 14,
+        KeyCode::Digit9 => 15,
+        KeyCode::Equal => 16,
+        KeyCode::IntlBackslash => 17,
+        KeyCode::IntlRo => 18,
+        KeyCode::IntlYen => 19,
+        KeyCode::KeyA => 20,
+        KeyCode::KeyB => 21,
+        KeyCode::KeyC => 22,
+        KeyCode::KeyD => 23,
+        KeyCode::KeyE => 24,
+        KeyCode::KeyF => 25,
+        KeyCode::KeyG => 26,
+        KeyCode::KeyH => 27,
+        KeyCode::KeyI => 28,
+        KeyCode::KeyJ => 29,
+        KeyCode::KeyK => 30,
+        KeyCode::KeyL => 31,
+        KeyCode::KeyM => 32,
+        KeyCode::KeyN => 33,
+        KeyCode::KeyO => 34,
+        KeyCode::KeyP => 35,
+        KeyCode::KeyQ => 36,
+        KeyCode::KeyR => 37,
+        KeyCode::KeyS => 38,
+        KeyCode::KeyT => 39,
+        KeyCode::KeyU => 40,
+        KeyCode::KeyV => 41,
+        KeyCode::KeyW => 42,
+        KeyCode::KeyX => 43,
+        KeyCode::KeyY => 44,
+        KeyCode::KeyZ => 45,
+        KeyCode::Minus => 46,
+        KeyCode::Period => 47,
+        KeyCode::Quote => 48,
+        KeyCode::Semicolon => 49,
+        KeyCode::Slash => 50,
+        KeyCode::AltLeft => 51,
+        KeyCode::AltRight => 52,
+        KeyCode::Backspace => 53,
+        KeyCode::CapsLock => 54,
+        KeyCode::ContextMenu => 55,
+        KeyCode::ControlLeft => 56,
+        KeyCode::ControlRight => 57,
+        KeyCode::Enter => 58,
+        KeyCode::SuperLeft => 59,
+        KeyCode::SuperRight => 60,
+        KeyCode::ShiftLeft => 61,
+        KeyCode::ShiftRight => 62,
+        KeyCode::Space => 63,
+        KeyCode::Tab => 64,
+        KeyCode::Convert => 65,
+        KeyCode::KanaMode => 66,
+        KeyCode::Lang1 => 67,
+        KeyCode::Lang2 => 68,
+        KeyCode::Lang3 => 69,
+        KeyCode::Lang4 => 70,
+        KeyCode::Lang5 => 71,
+        KeyCode::NonConvert => 72,
+        KeyCode::Delete => 73,
+        KeyCode::End => 74,
+        KeyCode::Help => 75,
+        KeyCode::Home => 76,
+        KeyCode::Insert => 77,
+        KeyCode::PageDown => 78,
+        KeyCode::PageUp => 79,
+        KeyCode::ArrowDown => 80,
+        KeyCode::ArrowLeft => 81,
+        KeyCode::ArrowRight => 82,
+        KeyCode::ArrowUp => 83,
+        KeyCode::NumLock => 84,
+        KeyCode::Numpad0 => 85,
+        KeyCode::Numpad1 => 86,
+        KeyCode::Numpad2 => 87,
+        KeyCode::Numpad3 => 88,
+        KeyCode::Numpad4 => 89,
+        KeyCode::Numpad5 => 90,
+        KeyCode::Numpad6 => 91,
+        KeyCode::Numpad7 => 92,
+        KeyCode::Numpad8 => 93,
+        KeyCode::Numpad9 => 94,
+        KeyCode::NumpadAdd => 95,
+        KeyCode::NumpadBackspace => 96,
+        KeyCode::NumpadClear => 97,
+        KeyCode::NumpadClearEntry => 98,
+        KeyCode::NumpadComma => 99,
+        KeyCode::NumpadDecimal => 100,
+        KeyCode::NumpadDivide => 101,
+        KeyCode::NumpadEnter => 102,
+        KeyCode::NumpadEqual => 103,
+        KeyCode::NumpadHash => 104,
+        KeyCode::NumpadMemoryAdd => 105,
+        KeyCode::NumpadMemoryClear => 106,
+        KeyCode::NumpadMemoryRecall => 107,
+        KeyCode::NumpadMemoryStore => 108,
+        KeyCode::NumpadMemorySubtract => 109,
+        KeyCode::NumpadMultiply => 110,
+        KeyCode::NumpadParenLeft => 111,
+        KeyCode::NumpadParenRight => 112,
+        KeyCode::NumpadStar => 113,
+        KeyCode::NumpadSubtract => 114,
+        KeyCode::Escape => 115,
+        KeyCode::Fn => 116,
+        KeyCode::FnLock => 117,
+        KeyCode::PrintScreen => 118,
+        KeyCode::ScrollLock => 119,
+        KeyCode::Pause => 120,
+        KeyCode::BrowserBack => 121,
+        KeyCode::BrowserFavorites => 122,
+        KeyCode::BrowserForward => 123,
+        KeyCode::BrowserHome => 124,
+        KeyCode::BrowserRefresh => 125,
+        KeyCode::BrowserSearch => 126,
+        KeyCode::BrowserStop => 127,
+        KeyCode::Eject => 128,
+        KeyCode::LaunchApp1 => 129,
+        KeyCode::LaunchApp2 => 130,
+        KeyCode::LaunchMail => 131,
+        KeyCode::MediaPlayPause => 132,
+        KeyCode::MediaSelect => 133,
+        KeyCode::MediaStop => 134,
+        KeyCode::MediaTrackNext => 135,
+        KeyCode::MediaTrackPrevious => 136,
+        KeyCode::Power => 137,
+        KeyCode::Sleep => 138,
+        KeyCode::AudioVolumeDown => 139,
+        KeyCode::AudioVolumeMute => 140,
+        KeyCode::AudioVolumeUp => 141,
+        KeyCode::WakeUp => 142,
+        KeyCode::Meta => 143,
+        KeyCode::Hyper => 144,
+        KeyCode::Turbo => 145,
+        KeyCode::Abort => 146,
+        KeyCode::Resume => 147,
+        KeyCode::Suspend => 148,
+        KeyCode::Again => 149,
+        KeyCode::Copy => 150,
+        KeyCode::Cut => 151,
+        KeyCode::Find => 152,
+        KeyCode::Open => 153,
+        KeyCode::Paste => 154,
+        KeyCode::Props => 155,
+        KeyCode::Select => 156,
+        KeyCode::Undo => 157,
+        KeyCode::Hiragana => 158,
+        KeyCode::Katakana => 159,
+        KeyCode::F1 => 160,
+        KeyCode::F2 => 161,
+        KeyCode::F3 => 162,
+        KeyCode::F4 => 163,
+        KeyCode::F5 => 164,
+        KeyCode::F6 => 165,
+        KeyCode::F7 => 166,
+        KeyCode::F8 => 167,
+        KeyCode::F9 => 168,
+        KeyCode::F10 => 169,
+        KeyCode::F11 => 170,
+        KeyCode::F12 => 171,
+        KeyCode::F13 => 172,
+        KeyCode::F14 => 173,
+        KeyCode::F15 => 174,
+        KeyCode::F16 => 175,
+        KeyCode::F17 => 176,
+        KeyCode::F18 => 177,
+        KeyCode::F19 => 178,
+        KeyCode::F20 => 179,
+        KeyCode::F21 => 180,
+        KeyCode::F22 => 181,
+        KeyCode::F23 => 182,
+        KeyCode::F24 => 183,
+        KeyCode::F25 => 184,
+        KeyCode::F26 => 185,
+        KeyCode::F27 => 186,
+        KeyCode::F28 => 187,
+        KeyCode::F29 => 188,
+        KeyCode::F30 => 189,
+        KeyCode::F31 => 190,
+        KeyCode::F32 => 191,
+        KeyCode::F33 => 192,
+        KeyCode::F34 => 193,
+        KeyCode::F35 => 194,
+        KeyCode::Unidentified(_) => 0,
+    }
 }
 
 impl PositionEvent {
